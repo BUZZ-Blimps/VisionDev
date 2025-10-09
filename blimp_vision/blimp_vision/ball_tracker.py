@@ -4,7 +4,7 @@ Module for BallTracker, which selects the optimal target from detection results.
 """
 
 import numpy as np
-from blimp_vision_msgs.msg import Detection
+# from blimp_vision_msgs.msg import Detection
 from collections import defaultdict
 
 

@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from blimp_vision_msgs.msg import Detection
+# from blimp_vision_msgs.msg import Detection
 
 # Define parameters
 orange_hsv = {

@@ -21,7 +21,7 @@ from rclpy.node import Node
 from rclpy.qos import (QoSProfile, QoSHistoryPolicy,
                        QoSReliabilityPolicy, QoSDurabilityPolicy)
 from std_msgs.msg import Bool, Float64MultiArray, Int64MultiArray
-from blimp_vision_msgs.msg import PerformanceMetrics
+# from blimp_vision_msgs.msg import PerformanceMetrics
 # from ultralytics import YOLO
 
 from blimp_vision.ball_tracker import BallTracker
@@ -39,6 +39,8 @@ class CameraNode(Node):
 
     def __init__(self):
         super().__init__('blimp_vision_node')
+        self.running = True
+
         self._declare_parameters()
         self._get_parameters()
 
@@ -77,7 +79,7 @@ class CameraNode(Node):
         self.state = 0
 
         # Publishers.
-        self.pub_performance = self.create_publisher(PerformanceMetrics, 'performance_metrics', 10)
+        # self.pub_performance = self.create_publisher(PerformanceMetrics, 'performance_metrics', 10)
         self.pub_detections = self.create_publisher(Float64MultiArray, 'targets', 10)
         self.pub_grid = self.create_publisher(Float64MultiArray, 'grid_distances', 10)
 
@@ -122,8 +124,6 @@ class CameraNode(Node):
         self.camera_number = self.get_parameter('camera_number').value
         self.device_path = self.get_parameter('device_path').value
         self.calibration_path = self.get_parameter('calibration_path').value
-        self.ball_model_file = self.get_parameter('ball_model_file').value
-        self.goal_model_file = self.get_parameter('goal_model_file').value
         self.verbose_mode = self.get_parameter('verbose_mode').value
         self.save_frames = self.get_parameter('save_frames').value
         self.save_location = self.get_parameter('save_location').value
@@ -523,7 +523,7 @@ class CameraNode(Node):
             if not detected and contour_detection_msg is not None:
                 timing['preprocessing'] = 0.0
                 timing['disparity'] = 0.0
-                timing['yolo_inference'] = 0.0
+                # timing['yolo_inference'] = 0.0
 
                 theta_x, theta_y = self.get_bbox_theta_offsets(contour_detection_msg.bbox, contour_detection_msg.depth)
                 self.pub_detections.publish(Float64MultiArray(data=[
@@ -581,7 +581,7 @@ class CameraNode(Node):
                 #nothing founded
                 timing['preprocessing'] = 0.0
                 timing['disparity'] = 0.0
-                timing['yolo_inference'] = 0.0
+                # timing['yolo_inference'] = 0.0
                 self.pub_detections.publish(Float64MultiArray(data=[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]))
 
         else:
@@ -613,53 +613,53 @@ class CameraNode(Node):
                     detection_msg = contour_detection_msg
             
             # Try using YOLO
-            if not detected:
-                timing['preprocessing'] = (time.time() - t_preprocess_start) * 1000
-                disp_future = self.thread_pool.submit(self.compute_disparity, left_frame, right_frame)
+            # if not detected:
+            #     timing['preprocessing'] = (time.time() - t_preprocess_start) * 1000
+            #     disp_future = self.thread_pool.submit(self.compute_disparity, left_frame, right_frame)
             
-                #yolo_future = self.thread_pool.submit(self.run_model, left_frame)
-                #t_disp, disparity = self.compute_disparity(left_frame, right_frame)
-                t_yolo, detections = self.run_model_goal(left_frame) 
+            #     #yolo_future = self.thread_pool.submit(self.run_model, left_frame)
+            #     #t_disp, disparity = self.compute_disparity(left_frame, right_frame)
+            #     # t_yolo, detections = self.run_model_goal(left_frame)
 
-                detection_msg = self.tracker.select_target(
-                    detections,
-                    yellow_goal_mode=None if self.ball_search_mode else self.yellow_goal_mode
-                )
+            #     detection_msg = self.tracker.select_target(
+            #         detections,
+            #         yellow_goal_mode=None if self.ball_search_mode else self.yellow_goal_mode
+            #     )
 
-                t_disp, disparity = disp_future.result()
+            #     t_disp, disparity = disp_future.result()
 
-                timing['disparity'] = t_disp * 1000
-                timing['yolo_inference'] = t_yolo * 1000
+            #     timing['disparity'] = t_disp * 1000
+            #     # timing['yolo_inference'] = t_yolo * 1000
 
-                # Process detections.
-                if detection_msg is not None:
-                    # Goal detection mode: use the calibrated vertical focal length and real goal height.
-                    # Assume detection_msg.obj_class contains a string like "circle", "square", or "triangle"
-                    obj_class = detection_msg.obj_class.lower()
-                    if "circle" in obj_class:
-                        real_height = self.goal_circle_height
-                    elif "triangle" in obj_class:
-                        real_height = self.goal_triangle_height
-                    elif "square" in obj_class:
-                        real_height = self.goal_square_height
-                    raw_goal_height = (self.goal_vertical_focal * real_height) / detection_msg.bbox[3]
-                    raw_depth = (self.goal_vertical_focal * real_height) / detection_msg.bbox[3]
-                    # Use the goal_vertical_focal loaded from calibration.
-                    detection_msg.depth = 0.31804 * np.exp(0.59 * raw_depth) + 1.424
+            #     # Process detections.
+            #     if detection_msg is not None:
+            #         # Goal detection mode: use the calibrated vertical focal length and real goal height.
+            #         # Assume detection_msg.obj_class contains a string like "circle", "square", or "triangle"
+            #         obj_class = detection_msg.obj_class.lower()
+            #         if "circle" in obj_class:
+            #             real_height = self.goal_circle_height
+            #         elif "triangle" in obj_class:
+            #             real_height = self.goal_triangle_height
+            #         elif "square" in obj_class:
+            #             real_height = self.goal_square_height
+            #         raw_goal_height = (self.goal_vertical_focal * real_height) / detection_msg.bbox[3]
+            #         raw_depth = (self.goal_vertical_focal * real_height) / detection_msg.bbox[3]
+            #         # Use the goal_vertical_focal loaded from calibration.
+            #         detection_msg.depth = 0.31804 * np.exp(0.59 * raw_depth) + 1.424
                     
-                    theta_x, theta_y = self.get_bbox_theta_offsets(detection_msg.bbox, detection_msg.depth)
+            #         theta_x, theta_y = self.get_bbox_theta_offsets(detection_msg.bbox, detection_msg.depth)
 
-                    self.pub_detections.publish(Float64MultiArray(data=[
-                        detection_msg.bbox[0],
-                        detection_msg.bbox[1],
-                        detection_msg.depth,
-                        detection_msg.track_id * 1.0,
-                        (not self.ball_search_mode) * 1.0,
-                        theta_x, theta_y,
-                        detection_msg.bbox[2], detection_msg.bbox[3]
-                    ]))
+            #         self.pub_detections.publish(Float64MultiArray(data=[
+            #             detection_msg.bbox[0],
+            #             detection_msg.bbox[1],
+            #             detection_msg.depth,
+            #             detection_msg.track_id * 1.0,
+            #             (not self.ball_search_mode) * 1.0,
+            #             theta_x, theta_y,
+            #             detection_msg.bbox[2], detection_msg.bbox[3]
+            #         ]))
 
-                    detected = True
+            #         detected = True
             
             # Go back to coutour
             if not detected and contour_detection_msg is not None:
@@ -709,40 +709,44 @@ class CameraNode(Node):
                         (top_left[0], top_left[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        # Stream the processed frame.
         processed = cv2.resize(debug_view, (640, 480))
-        data = processed.tobytes()
-        buf = Gst.Buffer.new_allocate(None, len(data), None)
-        buf.fill(0, data)
-        buf.pts = int(self.stream_timestamp * Gst.SECOND)
-        buf.duration = int(self.frame_duration * Gst.SECOND)
-        self.stream_timestamp += self.frame_duration
+        cv2.imshow('debug view', processed)
 
-        flow_return = self.appsrc.emit("push-buffer", buf)
-        if flow_return != Gst.FlowReturn.OK:
-            self.get_logger().error("Error pushing buffer: " + str(flow_return))
+        if cv2.waitKey(1) == ord('q'):
+            self.running = False
+        # Stream the processed frame.
+        # processed = cv2.resize(debug_view, (640, 480))
+        # data = processed.tobytes()
+        # buf = Gst.Buffer.new_allocate(None, len(data), None)
+        # buf.fill(0, data)
+        # buf.pts = int(self.stream_timestamp * Gst.SECOND)
+        # buf.duration = int(self.frame_duration * Gst.SECOND)
+        # self.stream_timestamp += self.frame_duration
+        # flow_return = self.appsrc.emit("push-buffer", buf)
+        # if flow_return != Gst.FlowReturn.OK:
+        #     self.get_logger().error("Error pushing buffer: " + str(flow_return))
 
         timing['total'] = (time.time() - t_total) * 1000
 
         # Publish performance metrics.
-        perf_msg = PerformanceMetrics()
-        perf_msg.yolo_time = timing['yolo_inference']
-        perf_msg.disparity_time = timing['disparity']
-        perf_msg.total_time = timing['total']
-        perf_msg.fps = (1 / perf_msg.total_time) * 1000
-        self.pub_performance.publish(perf_msg)
+        # perf_msg = PerformanceMetrics()
+        # perf_msg.yolo_time = timing['yolo_inference']
+        # perf_msg.disparity_time = timing['disparity']
+        # perf_msg.total_time = timing['total']
+        # perf_msg.fps = (1 / perf_msg.total_time) * 1000
+        # self.pub_performance.publish(perf_msg)
 
         if self.save_frames:
             # self.video_writer.write(left_frame)
             self.video_writer.write(frame)
-
 
 def main(args=None):
     import rclpy
     rclpy.init(args=args)
     node = CameraNode()
     try:
-        rclpy.spin(node)
+        while node.running:
+            rclpy.spin_once(node)
     except KeyboardInterrupt:
         pass
     finally:
@@ -751,7 +755,6 @@ def main(args=None):
         node.thread_pool.shutdown(wait=True)
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

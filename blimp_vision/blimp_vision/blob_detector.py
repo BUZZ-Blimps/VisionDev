@@ -4,7 +4,6 @@ import math
 import time
 from blimp_vision_msgs.msg import Detection
 
-
 class BlobDetectorClass:
     def __init__(self):
          ######## Define prarmeters ########
