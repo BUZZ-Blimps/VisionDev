@@ -23,13 +23,9 @@ if (
     os.environ['QT_QPA_PLATFORM'] = 'xcb'
 
 import cv2
-import gi
 import numpy as np
 import yaml
 from cv_bridge import CvBridge
-
-gi.require_version('Gst', '1.0')
-from gi.repository import Gst, GLib
 from rclpy.node import Node
 from rclpy.qos import (QoSProfile, QoSHistoryPolicy,
                        QoSReliabilityPolicy, QoSDurabilityPolicy)
@@ -43,8 +39,6 @@ from blimp_vision.contour_goal_detection import contour_find_goal
 from blimp_vision.blob_detector import BlobDetectorClass
 from blimp_vision.runtime_config import RuntimeConfig, apply_runtime_config, load_runtime_config_file
 
-# Initialize GStreamer once at startup.
-Gst.init(None)
 cv2.setUseOptimized(True)
 cv2.setNumThreads(2)
 print(f'OpenCV enabled?: {cv2.ocl.haveOpenCL()}')
@@ -66,11 +60,13 @@ class CameraNode(Node):
             self.cap = cv2.VideoCapture(self.device_path)
             if not self.cap.isOpened():
                 self.get_logger().error(f'Failed to open camera at {self.device_path}')
+                self.running = False
                 return
         else:
             self.cap = cv2.VideoCapture(self.input_video_path)
             if not self.cap.isOpened():
                 self.get_logger().error(f'Failed to open camera at {self.input_video_path}')
+                self.running = False
                 return
 
         self._setup_camera()
@@ -288,6 +284,13 @@ class CameraNode(Node):
 
     def _setup_gstreamer(self):
         """Configure and launch the GStreamer pipeline for streaming."""
+        import gi
+
+        gi.require_version('Gst', '1.0')
+        from gi.repository import Gst
+
+        Gst.init(None)
+
         hostname = socket.gethostname()
         match = re.search(r'(\d+)$', hostname)
         device_num = int(match.group(1)) if match else 0
@@ -340,9 +343,9 @@ class CameraNode(Node):
 
         self.ball_search_mode = (self.state in [0, 1, 2, 3])
 
-        if old_state is not self.state and self.ball_search_mode:
+        if old_state != self.state and self.ball_search_mode:
             self.get_logger().info('Blimp switched from goal search to ball search, Switching vision model...')
-        elif old_state is not self.state and not self.ball_search_mode:
+        elif old_state != self.state and not self.ball_search_mode:
             self.get_logger().info('Blimp switched from ball search to goal search, Switching vision model...')
 
     def goal_color_callback(self, msg):
@@ -466,7 +469,7 @@ class CameraNode(Node):
         For ball mode: remove inf and nan values, then select only the values within the middle IQR.
         For goal mode: apply a mask (0.6w x 0.6h) centered in the ROI and use those values.
         """
-        x, y, w, h = bbox.astype(int)
+        x, y, w, h = self._bbox_array(bbox).astype(int)
         x_min = max(x - w // 2, 0)
         x_max = min(x + w // 2, disparity.shape[1])
         y_min = max(y - h // 2, 0)
@@ -540,6 +543,88 @@ class CameraNode(Node):
         theta_y = np.arctan(offset_y / self.fy)
         return theta_x, theta_y
 
+    def _bbox_array(self, bbox):
+        return np.asarray(bbox, dtype=np.float32)
+
+    def _publish_detection_msg(self, detection_msg):
+        if detection_msg is None:
+            self._publish_no_detection()
+            return
+
+        bbox = self._bbox_array(detection_msg.bbox)
+        theta_x, theta_y = self.get_bbox_theta_offsets(bbox, detection_msg.depth)
+        self.pub_detections.publish(Float64MultiArray(data=[
+            float(bbox[0]),
+            float(bbox[1]),
+            float(detection_msg.depth),
+            float(detection_msg.track_id),
+            float(not self.ball_search_mode),
+            float(theta_x),
+            float(theta_y),
+            float(bbox[2]),
+            float(bbox[3]),
+        ]))
+
+    def _publish_no_detection(self):
+        self.pub_detections.publish(
+            Float64MultiArray(data=[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0])
+        )
+
+    def _reuse_active_track_id(self, detection_msg):
+        if detection_msg is None:
+            return None
+
+        if self.tracker.current_tracked_id is not None:
+            detection_msg.track_id = int(self.tracker.current_tracked_id)
+        elif detection_msg.track_id < 0:
+            detection_msg.track_id = 0
+
+        return detection_msg
+
+    def _estimate_goal_depth(self, obj_class, bbox_height):
+        if bbox_height <= 0:
+            return -1.0
+
+        obj_class = str(obj_class).lower()
+        if "circle" in obj_class:
+            real_height = self.goal_circle_height
+        elif "triangle" in obj_class:
+            real_height = self.goal_triangle_height
+        else:
+            # Default to square height so generic contour detections still produce range.
+            real_height = self.goal_square_height
+
+        raw_depth = (self.goal_vertical_focal * real_height) / bbox_height
+        return 0.31804 * np.exp(0.59 * raw_depth) + 1.424
+
+    def _enrich_balloon_contour_detection(self, detection_msg):
+        if detection_msg is None:
+            return None
+
+        detection_msg = self._reuse_active_track_id(detection_msg)
+
+        if detection_msg.depth < 0 and detection_msg.bbox[2] > 0 and detection_msg.bbox[3] > 0:
+            detection_msg.depth = self.mono_depth_estimator(
+                detection_msg.bbox[2],
+                detection_msg.bbox[3],
+            )
+
+        return detection_msg
+
+    def _enrich_goal_contour_detection(self, detection_msg):
+        if detection_msg is None:
+            return None
+
+        detection_msg = self._reuse_active_track_id(detection_msg)
+
+        if detection_msg.depth < 0:
+            detection_msg.depth = self._estimate_goal_depth(
+                detection_msg.obj_class,
+                detection_msg.bbox[3],
+            )
+
+        return detection_msg
+
     def camera_callback(self):
         """Main callback: capture, process, stream frames, and publish metrics and grid distances."""
         timing = {}
@@ -564,20 +649,11 @@ class CameraNode(Node):
             # Try contour detection
             contour_detection_msg =  self.blobDetector.contour_find_ball(left_frame)
             if not detected and contour_detection_msg is not None:
+                contour_detection_msg = self._enrich_balloon_contour_detection(contour_detection_msg)
                 timing['preprocessing'] = 0.0
                 timing['disparity'] = 0.0
                 # timing['yolo_inference'] = 0.0
-
-                theta_x, theta_y = self.get_bbox_theta_offsets(contour_detection_msg.bbox, contour_detection_msg.depth)
-                self.pub_detections.publish(Float64MultiArray(data=[
-                    contour_detection_msg.bbox[0],
-                    contour_detection_msg.bbox[1],
-                    contour_detection_msg.depth,
-                    contour_detection_msg.track_id * 1.0,
-                    (not self.ball_search_mode) * 1.0,
-                    theta_x, theta_y,
-                    contour_detection_msg.bbox[2], contour_detection_msg.bbox[3]
-                ]))
+                self._publish_detection_msg(contour_detection_msg)
                 detected = True
                 detection_msg = contour_detection_msg
 
@@ -625,7 +701,7 @@ class CameraNode(Node):
                 timing['preprocessing'] = 0.0
                 timing['disparity'] = 0.0
                 # timing['yolo_inference'] = 0.0
-                self.pub_detections.publish(Float64MultiArray(data=[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]))
+                self._publish_no_detection()
 
         else:
             # Search for goals
@@ -634,24 +710,15 @@ class CameraNode(Node):
             # Try using contour detection
             contour_detection_msg = contour_find_goal(left_frame, self.yellow_goal_mode)
             if not detected and contour_detection_msg is not None:
+                contour_detection_msg = self._enrich_goal_contour_detection(contour_detection_msg)
                 timing['preprocessing'] = 0.0
                 timing['disparity'] = 0.0
                 timing['yolo_inference'] = 0.0
                 bbox_area = contour_detection_msg.bbox[2]*contour_detection_msg.bbox[3]
                 if bbox_area >= 8000: # pixel area to start trusting contours over YOLO
                     # Trust contour detection
-                    if self.tracker.current_tracked_id is not None:
-                        contour_detection_msg.track_id = self.tracker.current_tracked_id
-                    theta_x, theta_y = self.get_bbox_theta_offsets(contour_detection_msg.bbox, contour_detection_msg.depth)
-                    self.pub_detections.publish(Float64MultiArray(data=[
-                        contour_detection_msg.bbox[0],
-                        contour_detection_msg.bbox[1],
-                        contour_detection_msg.depth,
-                        contour_detection_msg.track_id * 1.0,
-                        (not self.ball_search_mode) * 1.0,
-                        theta_x, theta_y,
-                        contour_detection_msg.bbox[2], contour_detection_msg.bbox[3]
-                    ]))
+                    contour_detection_msg = self._reuse_active_track_id(contour_detection_msg)
+                    self._publish_detection_msg(contour_detection_msg)
                     detected = True
                     detection_msg = contour_detection_msg
             
@@ -706,27 +773,18 @@ class CameraNode(Node):
             
             # Go back to coutour
             if not detected and contour_detection_msg is not None:
+                contour_detection_msg = self._enrich_goal_contour_detection(contour_detection_msg)
                 timing['preprocessing'] = 0.0
                 timing['disparity'] = 0.0
                 timing['yolo_inference'] = 0.0
                 # Trust contour detection
-                if self.tracker.current_tracked_id is not None:
-                    contour_detection_msg.track_id = self.tracker.current_tracked_id
-                theta_x, theta_y = self.get_bbox_theta_offsets(contour_detection_msg.bbox, contour_detection_msg.depth)
-                self.pub_detections.publish(Float64MultiArray(data=[
-                    contour_detection_msg.bbox[0],
-                    contour_detection_msg.bbox[1],
-                    contour_detection_msg.depth,
-                    contour_detection_msg.track_id * 1.0,
-                    (not self.ball_search_mode) * 1.0,
-                    theta_x, theta_y,
-                    contour_detection_msg.bbox[2], contour_detection_msg.bbox[3]
-                ]))
+                contour_detection_msg = self._reuse_active_track_id(contour_detection_msg)
+                self._publish_detection_msg(contour_detection_msg)
                 detected = True
                 detection_msg = contour_detection_msg
             
             if not detected:
-                self.pub_detections.publish(Float64MultiArray(data=[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]))
+                self._publish_no_detection()
 
         # Prepare debug view.
         debug_view = left_frame.copy()
@@ -738,7 +796,7 @@ class CameraNode(Node):
         cv2.line(debug_view, (center_img[0], center_img[1] - 10), (center_img[0], center_img[1] + 10), (0, 0, 255), 2)
 
         if detection_msg is not None:
-            x, y, w, h = detection_msg.bbox.astype(int)
+            x, y, w, h = self._bbox_array(detection_msg.bbox).astype(int)
             # Define the bounding box corners (assuming x,y is the center of the box)
             top_left = (x - w // 2, y - h // 2)
             bottom_right = (x + w // 2, y + h // 2)

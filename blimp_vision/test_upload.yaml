@@ -12,11 +12,11 @@ vision_tuning:
           v_min: 55
           v_max: 220
         filters:
-          min_area: 333
-          min_fill: 66.0
-          ignore_top_ratio: 0.12
+          min_area: 220
+          min_fill: 50.0
+          ignore_top_ratio: 0.0
       purple_balloon:
-        enabled: false
+        enabled: true
         hsv:
           h_min: 101
           h_max: 140
@@ -25,9 +25,9 @@ vision_tuning:
           v_min: 40
           v_max: 190
         filters:
-          min_area: 333
-          min_fill: 66.0
-          ignore_top_ratio: 0.12
+          min_area: 220
+          min_fill: 50.0
+          ignore_top_ratio: 0.0
       goal_orange:
         enabled: true
         hsv:
@@ -37,7 +37,7 @@ vision_tuning:
           s_max: 255
           v_min: 200
           v_max: 255
-        score_threshold: 0.31
+        score_threshold: 0.18
       goal_yellow:
         enabled: true
         hsv:
@@ -47,9 +47,9 @@ vision_tuning:
           s_max: 255
           v_min: 180
           v_max: 255
-        score_threshold: 0.31
+        score_threshold: 0.18
     tracking:
-      use_kalman: false
+      use_kalman: true
       use_optical_flow: true
       use_lock: false
     green_lh: 41
@@ -64,12 +64,12 @@ vision_tuning:
     purple_us: 200
     purple_lv: 40
     purple_uv: 190
-    min_area: 333
-    min_percent_filled: 66.0
-    ignore_top_ratio: 0.12
+    min_area: 220
+    min_percent_filled: 50.0
+    ignore_top_ratio: 0.0
     include_green: true
-    include_purple: false
-    use_kalman: false
+    include_purple: true
+    use_kalman: true
     use_optical_flow: true
     use_lock: false
     goal_orange_h_min: 2
@@ -86,4 +86,4 @@ vision_tuning:
     goal_yellow_v_max: 255
     include_goal_orange: true
     include_goal_yellow: true
-    goal_score_threshold: 0.31
+    goal_score_threshold: 0.18

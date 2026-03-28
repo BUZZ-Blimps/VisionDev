@@ -14,15 +14,15 @@ def test_load_runtime_config_from_sample_yaml():
     assert config.purple_hsv.h_min == 101
     assert config.goal_orange_hsv.v_min == 200
     assert config.goal_yellow_hsv.h_max == 40
-    assert config.min_area == 333
-    assert config.min_percent_filled == 66.0
-    assert config.ignore_top_ratio == 0.12
+    assert config.min_area == 220
+    assert config.min_percent_filled == 50.0
+    assert config.ignore_top_ratio == 0.0
     assert config.include_green is True
-    assert config.include_purple is False
-    assert config.use_kalman is False
+    assert config.include_purple is True
+    assert config.use_kalman is True
     assert config.use_optical_flow is True
     assert config.use_lock is False
-    assert config.goal_score_threshold == 0.31
+    assert config.goal_score_threshold == 0.18
 
 
 def test_apply_runtime_config_updates_detector_modules():
@@ -36,14 +36,14 @@ def test_apply_runtime_config_updates_detector_modules():
     assert detector.green_uh == 80
     assert detector.purple_lh == 101
     assert detector.purple_uv == 190
-    assert detector.min_area == 333
-    assert detector.min_percent_filled == 66.0
-    assert detector.ignore_top_ratio == 0.12
+    assert detector.min_area == 220
+    assert detector.min_percent_filled == 50.0
+    assert detector.ignore_top_ratio == 0.0
     assert detector.include_green is True
-    assert detector.include_purple is False
-    assert detector.use_kalman is False
+    assert detector.include_purple is True
+    assert detector.use_kalman is True
     assert detector.use_optical_flow is True
     assert detector.use_lock is False
     assert goal_detection.orange_hsv["h_min"] == 2
     assert goal_detection.yellow_hsv["h_max"] == 40
-    assert goal_detection.score_threshold == 0.31
+    assert goal_detection.score_threshold == 0.18

@@ -83,10 +83,20 @@ def contour_find_goal(left_frame, yellow_goal_mode):
         contour_score = max(contour_score_poly, contour_score_circle)
 
         if(contour_score >= score_threshold):
-
-            polygon = approximate_polygon(contour, polygon_N)
-            if polygon is None or len(polygon) != polygon_N:
-                continue
+            approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+            vertex_count = len(approx)
+            if contour_score_circle >= contour_score_poly:
+                obj_class = "Circle"
+                class_id = 0
+            elif vertex_count == 3:
+                obj_class = "Triangle"
+                class_id = 2
+            elif vertex_count == 4:
+                obj_class = "Square"
+                class_id = 1
+            else:
+                obj_class = "Shape"
+                class_id = 3
 
             # Detected!
             x, y, w, h = cv2.boundingRect(contour)
@@ -94,15 +104,15 @@ def contour_find_goal(left_frame, yellow_goal_mode):
             cy = y + h/2
 
             detection_msg = Detection()
-            detection_msg.class_id = 1
-            detection_msg.obj_class = "Shape"
+            detection_msg.class_id = class_id
+            detection_msg.obj_class = obj_class
             detection_msg.bbox[0] = cx
             detection_msg.bbox[1] = cy
             detection_msg.bbox[2] = w
             detection_msg.bbox[3] = h
             detection_msg.depth = -1.0
             detection_msg.confidence = -1.0
-            detection_msg.track_id = -1
+            detection_msg.track_id = 0
 
             return detection_msg
     return None

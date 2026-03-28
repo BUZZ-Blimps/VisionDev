@@ -169,6 +169,7 @@ class BlobDetectorClass:
         # Find best contour based on max area and filters
         max_area = 0
         best_i = -1
+        best_color = None
         for i in range(len(contours)):
             cont_area = cv.contourArea(contours[i]) 
             if not self.isValidArea(contours[i]):
@@ -178,6 +179,11 @@ class BlobDetectorClass:
             if cont_area > max_area:
                 max_area = cont_area
                 best_i = i
+                contour_mask = np.zeros_like(combined_mask)
+                cv.drawContours(contour_mask, contours, i, 255, thickness=-1)
+                green_pixels = cv.countNonZero(cv.bitwise_and(g_mask, contour_mask))
+                purple_pixels = cv.countNonZero(cv.bitwise_and(p_mask, contour_mask))
+                best_color = "GreenBalloon" if green_pixels >= purple_pixels else "PurpleBalloon"
 
         if best_i > -1:
             (self.x,self.y), self.radius = cv.minEnclosingCircle(contours[best_i])
@@ -331,19 +337,21 @@ class BlobDetectorClass:
         # cv.circle(frame, (int(x_est),int(y_est)), int(radius), (0, 0, 255), 3)
 
         ######## Return detection ########
-        if self.x_est > -1:
+        center_x = self.x_est if self.x_est > -1 else self.x
+        center_y = self.y_est if self.y_est > -1 else self.y
+
+        if center_x > -1 and center_y > -1:
             diameter = self.radius * 2
 
             detection_msg = Detection()
-            detection_msg.class_id = 1
-            detection_msg.obj_class = "Shape"
-            detection_msg.bbox[0] = self.x_est
-            detection_msg.bbox[1] = self.y_est
+            detection_msg.class_id = 0 if best_color == "GreenBalloon" else 1
+            detection_msg.obj_class = best_color or "Balloon"
+            detection_msg.bbox[0] = center_x
+            detection_msg.bbox[1] = center_y
             detection_msg.bbox[2] = diameter
             detection_msg.bbox[3] = diameter
             detection_msg.depth = -1.0
             detection_msg.confidence = -1.0
-            detection_msg.track_id = -1
+            detection_msg.track_id = 0
 
             return detection_msg
-
