@@ -25,8 +25,10 @@ from std_msgs.msg import Bool, Float64MultiArray, Int64MultiArray
 # from ultralytics import YOLO
 
 from blimp_vision.ball_tracker import BallTracker
+from blimp_vision import contour_goal_detection as goal_detection
 from blimp_vision.contour_goal_detection import contour_find_goal
 from blimp_vision.blob_detector import BlobDetectorClass
+from blimp_vision.runtime_config import RuntimeConfig, apply_runtime_config, load_runtime_config_file
 
 # Initialize GStreamer once at startup.
 Gst.init(None)
@@ -67,6 +69,8 @@ class CameraNode(Node):
 
         # Blob detector
         self.blobDetector = BlobDetectorClass()
+        self.runtime_config = self._load_runtime_config()
+        apply_runtime_config(self.runtime_config, self.blobDetector, goal_detection)
 
         # Other variables.
         self.bridge = CvBridge()
@@ -100,6 +104,20 @@ class CameraNode(Node):
         # Set up Video Recorder if flag enabled.
         self._setup_videosaver()
 
+    def _load_runtime_config(self):
+        if not self.tuning_file:
+            self.get_logger().info('No tuning file provided, using built-in detector defaults')
+            return RuntimeConfig()
+
+        try:
+            config = load_runtime_config_file(self.tuning_file)
+        except Exception as exc:
+            self.get_logger().error(f'Failed to load tuning file {self.tuning_file}: {exc}')
+            raise
+
+        self.get_logger().info(f'Loaded tuning file: {self.tuning_file}')
+        return config
+
     def _declare_parameters(self):
         self.declare_parameters(
             namespace='',
@@ -117,6 +135,7 @@ class CameraNode(Node):
                 ('goal_square_height', 1.17),
                 ('goal_triangle_height', 1.50),
                 ('input_video_path', ""),
+                ('tuning_file', ""),
             ]
         )
 
@@ -132,6 +151,7 @@ class CameraNode(Node):
         self.goal_square_height = self.get_parameter('goal_square_height').value
         self.goal_triangle_height = self.get_parameter('goal_triangle_height').value
         self.input_video_path = self.get_parameter('input_video_path').value
+        self.tuning_file = self.get_parameter('tuning_file').value
 
     def _setup_camera(self):
         """Configure the camera properties."""

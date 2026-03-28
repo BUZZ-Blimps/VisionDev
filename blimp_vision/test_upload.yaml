@@ -1,0 +1,89 @@
+vision_tuning:
+  ros__parameters:
+    format_version: 2
+    detectors:
+      green_balloon:
+        enabled: true
+        hsv:
+          h_min: 41
+          h_max: 80
+          s_min: 70
+          s_max: 160
+          v_min: 55
+          v_max: 220
+        filters:
+          min_area: 333
+          min_fill: 66.0
+          ignore_top_ratio: 0.12
+      purple_balloon:
+        enabled: false
+        hsv:
+          h_min: 101
+          h_max: 140
+          s_min: 20
+          s_max: 200
+          v_min: 40
+          v_max: 190
+        filters:
+          min_area: 333
+          min_fill: 66.0
+          ignore_top_ratio: 0.12
+      goal_orange:
+        enabled: true
+        hsv:
+          h_min: 2
+          h_max: 24
+          s_min: 120
+          s_max: 255
+          v_min: 200
+          v_max: 255
+        score_threshold: 0.31
+      goal_yellow:
+        enabled: true
+        hsv:
+          h_min: 26
+          h_max: 40
+          s_min: 100
+          s_max: 255
+          v_min: 180
+          v_max: 255
+        score_threshold: 0.31
+    tracking:
+      use_kalman: false
+      use_optical_flow: true
+      use_lock: false
+    green_lh: 41
+    green_uh: 80
+    green_ls: 70
+    green_us: 160
+    green_lv: 55
+    green_uv: 220
+    purple_lh: 101
+    purple_uh: 140
+    purple_ls: 20
+    purple_us: 200
+    purple_lv: 40
+    purple_uv: 190
+    min_area: 333
+    min_percent_filled: 66.0
+    ignore_top_ratio: 0.12
+    include_green: true
+    include_purple: false
+    use_kalman: false
+    use_optical_flow: true
+    use_lock: false
+    goal_orange_h_min: 2
+    goal_orange_h_max: 24
+    goal_orange_s_min: 120
+    goal_orange_s_max: 255
+    goal_orange_v_min: 200
+    goal_orange_v_max: 255
+    goal_yellow_h_min: 26
+    goal_yellow_h_max: 40
+    goal_yellow_s_min: 100
+    goal_yellow_s_max: 255
+    goal_yellow_v_min: 180
+    goal_yellow_v_max: 255
+    include_goal_orange: true
+    include_goal_yellow: true
+    goal_score_threshold: 0.31

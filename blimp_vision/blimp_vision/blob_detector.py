@@ -2,7 +2,18 @@ import cv2 as cv
 import numpy as np
 import math
 import time
-from blimp_vision_msgs.msg import Detection
+
+try:
+    from blimp_vision_msgs.msg import Detection
+except Exception:
+    class Detection:
+        def __init__(self):
+            self.class_id = 0
+            self.obj_class = ""
+            self.bbox = [0.0, 0.0, 0.0, 0.0]
+            self.depth = 0.0
+            self.confidence = 0.0
+            self.track_id = 0
 
 class BlobDetectorClass:
     def __init__(self):
@@ -26,6 +37,7 @@ class BlobDetectorClass:
         # Filters
         self.min_percent_filled = 60
         self.min_area = 250
+        self.ignore_top_ratio = 0.0
         self.include_green = True
         self.include_purple = True
 
@@ -159,7 +171,11 @@ class BlobDetectorClass:
         best_i = -1
         for i in range(len(contours)):
             cont_area = cv.contourArea(contours[i]) 
-            if cont_area > max_area and self.isValidArea(contours[i]):
+            if not self.isValidArea(contours[i]):
+                continue
+            if self.y <= frame.shape[0] * self.ignore_top_ratio:
+                continue
+            if cont_area > max_area:
                 max_area = cont_area
                 best_i = i
 
@@ -330,5 +346,4 @@ class BlobDetectorClass:
             detection_msg.track_id = -1
 
             return detection_msg
-
 

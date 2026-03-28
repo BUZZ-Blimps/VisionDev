@@ -1,6 +1,17 @@
 import cv2
 import numpy as np
-# from blimp_vision_msgs.msg import Detection
+
+try:
+    from blimp_vision_msgs.msg import Detection
+except Exception:
+    class Detection:
+        def __init__(self):
+            self.class_id = 0
+            self.obj_class = ""
+            self.bbox = [0.0, 0.0, 0.0, 0.0]
+            self.depth = 0.0
+            self.confidence = 0.0
+            self.track_id = 0
 
 # Define parameters
 orange_hsv = {

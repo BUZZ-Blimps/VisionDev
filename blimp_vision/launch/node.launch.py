@@ -80,6 +80,11 @@ def generate_launch_description():
             default_value="",
             description='Path to video to use instead of camera'
         ),
+        DeclareLaunchArgument(
+            'tuning_file',
+            default_value='',
+            description='Path to ROS2-style detector tuning YAML'
+        ),
 
         Node(
             package='blimp_vision',
@@ -98,7 +103,8 @@ def generate_launch_description():
                 'goal_circle_height': LaunchConfiguration('goal_circle_height'),
                 'goal_square_height': LaunchConfiguration('goal_square_height'),
                 'goal_triangle_height': LaunchConfiguration('goal_triangle_height'),
-                'input_video_path': LaunchConfiguration('input_video_path')
+                'input_video_path': LaunchConfiguration('input_video_path'),
+                'tuning_file': LaunchConfiguration('tuning_file')
             }],
             output='screen'
         )
