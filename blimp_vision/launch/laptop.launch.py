@@ -32,7 +32,7 @@ def generate_launch_description():
                     get_package_share_directory('blimp_vision'),
                     'calibration'
                 ]),
-                'verbose_mode': 'false',
+                'verbose_mode': 'true',
                 'save_frames': 'false',
                 'save_location': 'frames/',
                 'input_video_path': ""

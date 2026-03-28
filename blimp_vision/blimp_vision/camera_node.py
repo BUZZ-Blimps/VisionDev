@@ -12,10 +12,23 @@ import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
+if (
+    not os.environ.get('QT_QPA_PLATFORM')
+    and os.environ.get('DISPLAY')
+    and (
+        os.environ.get('XDG_SESSION_TYPE') == 'wayland'
+        or os.environ.get('WAYLAND_DISPLAY')
+    )
+):
+    os.environ['QT_QPA_PLATFORM'] = 'xcb'
+
 import cv2
+import gi
 import numpy as np
 import yaml
 from cv_bridge import CvBridge
+
+gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 from rclpy.node import Node
 from rclpy.qos import (QoSProfile, QoSHistoryPolicy,
@@ -35,6 +48,8 @@ Gst.init(None)
 cv2.setUseOptimized(True)
 cv2.setNumThreads(2)
 print(f'OpenCV enabled?: {cv2.ocl.haveOpenCL()}')
+
+DEBUG_WINDOW_NAME = 'debug view'
 
 class CameraNode(Node):
     """ROS2 Node for vision processing using YOLO and stereo disparity."""
@@ -81,6 +96,7 @@ class CameraNode(Node):
         self.tracker = BallTracker(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) / 2,
                                    self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.state = 0
+        self.show_debug_window = self.verbose_mode and bool(os.environ.get('DISPLAY'))
 
         # Publishers.
         # self.pub_performance = self.create_publisher(PerformanceMetrics, 'performance_metrics', 10)
@@ -100,6 +116,13 @@ class CameraNode(Node):
 
         # Set up GStreamer streaming pipeline.
         # self._setup_gstreamer()
+
+        if self.show_debug_window:
+            cv2.namedWindow(DEBUG_WINDOW_NAME, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(DEBUG_WINDOW_NAME, 640, 480)
+            self.get_logger().info('OpenCV debug window enabled')
+        elif self.verbose_mode:
+            self.get_logger().warning('Verbose mode requested, but no GUI display was detected')
 
         # Set up Video Recorder if flag enabled.
         self._setup_videosaver()
@@ -729,11 +752,12 @@ class CameraNode(Node):
                         (top_left[0], top_left[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        processed = cv2.resize(debug_view, (640, 480))
-        cv2.imshow('debug view', processed)
+        if self.show_debug_window:
+            processed = cv2.resize(debug_view, (640, 480))
+            cv2.imshow(DEBUG_WINDOW_NAME, processed)
 
-        if cv2.waitKey(1) == ord('q'):
-            self.running = False
+            if cv2.waitKey(1) == ord('q'):
+                self.running = False
         # Stream the processed frame.
         # processed = cv2.resize(debug_view, (640, 480))
         # data = processed.tobytes()
@@ -770,9 +794,12 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        if node.save_frames:
+        if getattr(node, 'save_frames', False):
             node.video_writer.release()
-        node.thread_pool.shutdown(wait=True)
+        if getattr(node, 'show_debug_window', False):
+            cv2.destroyAllWindows()
+        if hasattr(node, 'thread_pool'):
+            node.thread_pool.shutdown(wait=True)
         node.destroy_node()
         rclpy.shutdown()
 
